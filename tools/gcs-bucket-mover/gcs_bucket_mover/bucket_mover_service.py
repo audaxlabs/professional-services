@@ -46,9 +46,11 @@ def main(config, parsed_args, cloud_logger):
 
     cloud_logger.log_text("Starting GCS Bucket Mover")
     _print_config_details(cloud_logger, config)
+    
 
     source_bucket = config.source_storage_client.lookup_bucket(  # pylint: disable=no-member
         config.bucket_name)
+    
 
     if source_bucket is None:
         msg = 'The source bucket does not exist, so we cannot continue'
@@ -96,7 +98,7 @@ def _rename_bucket(cloud_logger, config, source_bucket, source_bucket_details,
                                                 config, target_bucket)
     _run_and_wait_for_sts_job(sts_client, config.target_project,
                               config.bucket_name, config.target_bucket_name,
-                              cloud_logger)
+                              cloud_logger,config.source_path,config.target_path)
 
     _delete_empty_source_bucket(cloud_logger, source_bucket)
     _remove_sts_permissions(cloud_logger, sts_account_email, config,
@@ -123,7 +125,7 @@ def _move_bucket(cloud_logger, config, source_bucket, source_bucket_details,
                                                 config, target_temp_bucket)
     _run_and_wait_for_sts_job(sts_client, config.target_project,
                               config.bucket_name, config.temp_bucket_name,
-                              cloud_logger)
+                              cloud_logger,config.source_path,config.target_path)
 
     _delete_empty_source_bucket(cloud_logger, source_bucket)
     _recreate_source_bucket(cloud_logger, config, source_bucket_details)
@@ -131,7 +133,7 @@ def _move_bucket(cloud_logger, config, source_bucket, source_bucket_details,
                                           config)
     _run_and_wait_for_sts_job(sts_client, config.target_project,
                               config.temp_bucket_name, config.bucket_name,
-                              cloud_logger)
+                              cloud_logger,config.source_path,config.target_path)
 
     _delete_empty_temp_bucket(cloud_logger, target_temp_bucket)
     _remove_sts_permissions(cloud_logger, sts_account_email, config,
@@ -184,7 +186,7 @@ def _check_bucket_lock(cloud_logger, config, bucket, source_bucket_details):
             if source_bucket_details.acl_entities:
                 for entity in source_bucket_details.acl_entities:
                     cloud_logger.log_text(str(entity))
-
+            
             _lock_down_bucket(
                 spinner, cloud_logger, bucket, config.lock_file_name,
                 config.source_project_credentials.service_account_email)  # pylint: disable=no-member
@@ -219,6 +221,7 @@ def _lock_down_bucket(spinner, cloud_logger, bucket, lock_file_name,
     if not is_uniform_bucket:
         # Turn off any bucket ACLs
         bucket.acl.save_predefined('private')
+
 
     # Revoke all IAM access and only set the service account as an admin
     policy = api_core_iam.Policy()
@@ -313,14 +316,20 @@ def _delete_empty_source_bucket(cloud_logger, source_bucket):
     Args:
         cloud_logger: A GCP logging client instance
         source_bucket: The bucket object for the original source bucket in the source project
-    """
-
-    spinner_text = 'Deleting empty source bucket'
+    """   
+    list_blob=source_bucket.list_blobs()   
+    if sum(1 for _ in list_blob)==0:
+        
+        spinner_text = 'Deleting empty source bucket'
+        cloud_logger.log_text(spinner_text)
+        with yaspin(text=spinner_text) as spinner:
+            source_bucket.delete()
+            spinner.ok(_CHECKMARK)
+    
+    spinner_text = 'source bucket is not empty so could  not deleted'
     cloud_logger.log_text(spinner_text)
     with yaspin(text=spinner_text) as spinner:
-        source_bucket.delete()
         spinner.ok(_CHECKMARK)
-
 
 def _recreate_source_bucket(cloud_logger, config, source_bucket_details):
     """Now that the original source bucket is deleted, re-create it in the target project
@@ -736,7 +745,7 @@ def _assign_target_project_to_topic(spinner, cloud_logger, config, topic_name,
     wait_exponential_max=120000,
     stop_max_attempt_number=10)
 def _run_and_wait_for_sts_job(sts_client, target_project, source_bucket_name,
-                              sink_bucket_name, cloud_logger):
+                              sink_bucket_name, cloud_logger,source_path,target_path):
     """Kick off the STS job and wait for it to complete. Retry if it fails.
 
     Args:
@@ -761,7 +770,7 @@ def _run_and_wait_for_sts_job(sts_client, target_project, source_bucket_name,
     cloud_logger.log_text(spinner_text)
     with yaspin(text=spinner_text) as spinner:
         sts_job_name = _execute_sts_job(sts_client, target_project,
-                                        source_bucket_name, sink_bucket_name)
+                                        source_bucket_name, sink_bucket_name,source_path,target_path)
         spinner.ok(_CHECKMARK)
 
     # Check every 10 seconds until STS job is complete
@@ -774,7 +783,6 @@ def _run_and_wait_for_sts_job(sts_client, target_project, source_bucket_name,
             sleep(10)
 
     if job_status == sts_job_status.StsJobStatus.success:
-  
         return True
 
     # Execution will only reach this code if something went wrong with the STS job
@@ -790,7 +798,7 @@ def _run_and_wait_for_sts_job(sts_client, target_project, source_bucket_name,
 
 
 def _execute_sts_job(sts_client, target_project, source_bucket_name,
-                     sink_bucket_name):
+                     sink_bucket_name,source_path,target_path):
     """Start the STS job.
 
     Args:
@@ -801,8 +809,13 @@ def _execute_sts_job(sts_client, target_project, source_bucket_name,
 
     Returns:
         The name of the STS job as a string
-    """
-
+    """   
+    if source_path == "None":
+        source_path=None
+        
+    if target_path =="None":
+        target_path=None
+        
     now = datetime.date.today()
     transfer_job = {
         'description':
@@ -824,13 +837,17 @@ def _execute_sts_job(sts_client, target_project, source_bucket_name,
         },
         'transferSpec': {
             'gcsDataSource': {
-                'bucketName': source_bucket_name
+                'bucketName': source_bucket_name,
+                'path': source_path
             },
             'gcsDataSink': {
-                'bucketName': sink_bucket_name
+                'bucketName': sink_bucket_name,
+                "path": target_path
+
             },
             "transferOptions": {
                 "deleteObjectsFromSourceAfterTransfer": True,
+
             }
         }
     }
