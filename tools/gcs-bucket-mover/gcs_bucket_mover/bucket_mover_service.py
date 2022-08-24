@@ -170,7 +170,7 @@ def _check_bucket_lock(cloud_logger, config, bucket, source_bucket_details):
         source_bucket_details: The details copied from the source bucket that is being moved
     """
 
-    if not config.disable_bucket_lock:
+    if not (config.disable_bucket_lock) or is_rename:
         spinner_text = 'Confirming that lock file {} does not exist'.format(
             config.lock_file_name)
         cloud_logger.log_text(spinner_text)
