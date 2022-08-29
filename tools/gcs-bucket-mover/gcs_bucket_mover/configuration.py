@@ -43,6 +43,8 @@ class Configuration(object):
     disable_bucket_lock = attrib()
     lock_file_name = attrib()
     is_rename = attrib()
+    source_path=attrib()
+    target_path=attrib()
 
     @classmethod
     def from_conf(cls, conf):
@@ -99,4 +101,6 @@ class Configuration(object):
             temp_bucket_name=temp_bucket_name,
             is_rename=is_rename,
             disable_bucket_lock=conf.disable_bucket_lock,
-            lock_file_name=conf.lock_file_name)
+            lock_file_name=conf.lock_file_name,
+            source_path=conf.source_path,
+            target_path=conf.target_path)
