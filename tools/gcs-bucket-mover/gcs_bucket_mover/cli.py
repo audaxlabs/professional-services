@@ -175,6 +175,12 @@ def _get_parsed_args():
     parser.add_argument(
         '--test_topic_name',
         help='A topic name to set up a notification for on the test bucket')
+    parser.add_argument(
+        '--source_path',
+        help='a path which you want to transfer source path')
+    parser.add_argument(
+        '--target_path',
+        help='A path where you want to transfer')
 
     return parser.parse_args()
 
