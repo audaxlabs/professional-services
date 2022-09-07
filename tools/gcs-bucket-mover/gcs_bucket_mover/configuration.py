@@ -45,6 +45,7 @@ class Configuration(object):
     is_rename = attrib()
     source_path=attrib()
     target_path=attrib()
+    transfer_manifest=attrib()
 
     @classmethod
     def from_conf(cls, conf):
@@ -103,4 +104,5 @@ class Configuration(object):
             disable_bucket_lock=conf.disable_bucket_lock,
             lock_file_name=conf.lock_file_name,
             source_path=conf.source_path,
-            target_path=conf.target_path)
+            target_path=conf.target_path,
+            transfer_manifest=conf.transfer_manifest)

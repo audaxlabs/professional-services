@@ -181,6 +181,9 @@ def _get_parsed_args():
     parser.add_argument(
         '--target_path',
         help='A path where you want to transfer')
+    parser.add_argument(
+        '--transfer_manifest',
+        help='Transfer specific files or objects using a manifest')
 
     return parser.parse_args()
 
